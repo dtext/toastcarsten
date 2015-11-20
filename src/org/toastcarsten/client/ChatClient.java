@@ -1,4 +1,4 @@
-package org.dt.toastcarsten.client;
+package org.toastcarsten.client;
 
 public class ChatClient {
 

@@ -1,4 +1,4 @@
-package org.dt.toastcarsten.shared;
+package org.toastcarsten.shared;
 
 public class IClient {
 

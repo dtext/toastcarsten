@@ -1,7 +1,7 @@
-package org.dt.toastcarsten.server;
+package org.toastcarsten.server;
 
-import org.dt.toastcarsten.shared.CmdParser;
-import org.dt.toastcarsten.shared.IServer;
+import org.toastcarsten.shared.CmdParser;
+import org.toastcarsten.shared.IServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
