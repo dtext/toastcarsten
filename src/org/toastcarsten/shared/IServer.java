@@ -27,4 +27,9 @@ public interface IServer {
      */
     void broadcast(String text) throws IOException;
 
+    /**
+     * Remove the specified user from the channel
+     * @param user name of the user to be removed
+     */
+    void logout(String user) throws IOException;
 }

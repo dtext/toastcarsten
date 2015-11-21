@@ -1,8 +1,9 @@
 package org.toastcarsten.server;
 
-import org.toastcarsten.shared.CmdParser;
+import org.toastcarsten.shared.Protocol;
 import org.toastcarsten.shared.IServer;
 
+import javax.naming.NameAlreadyBoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.*;
@@ -12,7 +13,7 @@ public class ChatServer implements IServer {
 
     private Selector events;
     private ServerSocketChannel listener;
-    private CmdParser cmdParser;
+    private Protocol protocol;
 
     public static void main(String[] args) {
         try {
@@ -29,7 +30,7 @@ public class ChatServer implements IServer {
         listener.configureBlocking(false);
         listener.socket().bind(new InetSocketAddress(port));
         listener.register(events, SelectionKey.OP_ACCEPT);
-        cmdParser = new CmdParser(this);
+        protocol = new Protocol(this);
     }
 
     public void run() {
@@ -69,12 +70,24 @@ public class ChatServer implements IServer {
     }
 
     private void processRead(SelectionKey client) throws IOException {
-        String sendername = ((User)client.attachment()).name;
         SocketChannel senderchannel = (SocketChannel)client.channel();
         String[] messages = ChannelIO.read((SocketChannel)client.channel()).split("\n");
         for (String message : messages) {
-            CmdParser.Command cmd = cmdParser.parseClient(message);
-            cmd.action();
+            // TODO: Send back illegal command error if this fails
+            Protocol.ClientCommand cmd = (Protocol.ClientCommand) protocol.parseClient(message);
+            if (cmd instanceof Protocol.Login) {
+                String name = cmd.args;
+                User u = User.get(client);
+                try {
+                    u.setName(name);
+                } catch (NameAlreadyBoundException e) {
+                    Protocol.Error err = Protocol.Error.NameAlreadyInUse;
+                    ChannelIO.write(senderchannel, protocol.new ErrorMessage(err).toString());
+                }
+            } else {
+                String username = User.get(client).getName();
+                cmd.action(username);
+            }
         }
     }
 
@@ -86,28 +99,26 @@ public class ChatServer implements IServer {
 
     @Override
     public void send(String username, String message) throws IOException {
-        for (SelectionKey key : events.keys()) {
-            SelectableChannel user = key.channel();
-            if (user instanceof ServerSocketChannel |! username.equals(((User) key.attachment()).name))
-                continue;
-            ChannelIO.write((SocketChannel)user, message);
-        }
+        SocketChannel sc = User.get(username).getChannel();
+        ChannelIO.write(sc, message);
     }
 
     @Override
     public void multicast(String sender, String text) throws IOException {
-        for (SelectionKey key : events.keys()) {
-            SelectableChannel user = key.channel();
-            if (user instanceof ServerSocketChannel)
-                continue;
-            else if (sender.equals(((User) key.attachment()).name))
-                continue;
-            ChannelIO.write((SocketChannel) key.channel(), text);
+        for (User user : User.getUsers()) {
+            if (!user.getName().equals(sender))
+                ChannelIO.write(user.getChannel(), text);
         }
     }
 
     @Override
     public void broadcast(String text) throws IOException {
         multicast("", text);
+    }
+
+    @Override
+    public void logout(String name){
+        User u = User.get(name);
+        User.remove(u);
     }
 }
