@@ -3,6 +3,8 @@ package org.toastcarsten.shared;
 import org.toastcarsten.server.User;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.StringJoiner;
 
 public class Protocol {
@@ -117,18 +119,23 @@ public class Protocol {
     }
     public class ErrorMessage extends ServerCommand {
 
+        Error error;
+
         public ErrorMessage(Error err) {
             cmd = "/error";
             args = err.name();
+            error = err;
         }
 
         @Override
         public void action() {
-            Error e = Error.valueOf(args);
-            if (e == Error.NameAlreadyInUse) {
-                // TODO Name already in use
+            if (error == Error.NameAlreadyInUse) {
+                client.handleNameError();
+            } else if (error == Error.CommandNotAllowed) {
+                client.printHl("The given command is not allowed in this context.");
+            } else if (error == Error.CommandNotFound) {
+                client.printHl("You have entered an invalid command.");
             }
-            //TODO complete action
         }
     }
 
@@ -136,14 +143,24 @@ public class Protocol {
         timeout, logout
     }
     public class UserLeft extends ServerCommand {
+
+        Reason reason;
+        String name;
+
         public UserLeft(String username, Reason r) {
             cmd = "/userleft";
+            name = username;
             args = username + " " + r.name();
+            reason = r;
         }
 
         @Override
         public void action() {
-            //TODO add action
+            if (reason == Reason.logout) {
+                client.printHl(name + " left the channel.");
+            } else if (reason == Reason.timeout) {
+                client.printHl(name + " timed out.");
+            }
         }
     }
 
@@ -155,7 +172,7 @@ public class Protocol {
 
         @Override
         public void action() {
-            //TODO add action
+            client.printHl(args + " just joined.");
         }
     }
 
@@ -167,14 +184,17 @@ public class Protocol {
 
         @Override
         public void action() {
-            //TODO add action
+            // TODO: according to the protocol, this shouldn't be here. Look this up.
         }
     }
 
     public class UserlistAnswer extends ServerCommand {
+
+        private static final String sep = ", ";
+
         public UserlistAnswer() {
             cmd = "/userlist";
-            StringJoiner sj = new StringJoiner(",");
+            StringJoiner sj = new StringJoiner(sep);
             for (User u : User.getUsers()) {
                 sj.add(u.getName());
             }
@@ -183,7 +203,8 @@ public class Protocol {
 
         @Override
         public void action() {
-            //TODO add action
+            List<String> ul = Arrays.asList(args.split(sep));
+            client.recvUserlist(ul);
         }
     }
 
@@ -194,7 +215,7 @@ public class Protocol {
 
         @Override
         public void action() {
-            //TODO add action
+            client.print(this.toString());
         }
     }
 
@@ -206,19 +227,19 @@ public class Protocol {
 
         @Override
         public void action() {
-            //TODO add action
+            client.printHl("[Server message] " + args);
         }
     }
 
     public class Welcome extends ServerCommand {
         public Welcome(String username) {
-            cmd = "";
+            cmd = "/welcome";
             args = "Hi, " + username + "! Welcome to the Toastcarsten Server.";
         }
 
         @Override
         public void action() {
-            //TODO add action
+            client.printHl(args);
         }
     }
 
