@@ -23,7 +23,7 @@ public interface IClient {
     void recvUserlist(Collection<String> list);
 
     /**
-     * Called to handle the event that the cosen name is already taken.
+     * Called to handle the event that the chosen name is already taken.
      */
     void handleNameError();
 }
