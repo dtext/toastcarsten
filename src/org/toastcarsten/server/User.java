@@ -41,7 +41,7 @@ public class User {
     private SelectionKey key;
     private long timeout;
 
-    private User(SelectionKey key) {
+    public User(SelectionKey key) {
         this.key = key;
         User.selkeyMap.put(key, this);
     }

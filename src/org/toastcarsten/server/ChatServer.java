@@ -70,22 +70,37 @@ public class ChatServer implements IServer {
     }
 
     private void processRead(SelectionKey client) throws IOException {
-        SocketChannel senderchannel = (SocketChannel)client.channel();
+        User u = User.get(client);
+        SocketChannel clientChannel = u.getChannel();
         String[] messages = ChannelIO.read((SocketChannel)client.channel()).split("\n");
         for (String message : messages) {
-            // TODO: Send back illegal command error if this fails
-            Protocol.ClientCommand cmd = (Protocol.ClientCommand) protocol.parseClient(message);
+            Protocol.ClientCommand cmd = null;
+            // try to parse command, if invalid, send error
+            try {
+                cmd = (Protocol.ClientCommand) protocol.parseClient(message);
+            } catch (ClassCastException e) {
+                Protocol.Error err = Protocol.Error.CommandNotFound;
+                ChannelIO.write(clientChannel, protocol.new ErrorMessage(err).toString());
+                continue;
+            }
+            // Login handled by the server because the SelectionKey needs to be present
             if (cmd instanceof Protocol.Login) {
                 String name = cmd.args;
-                User u = User.get(client);
                 try {
                     u.setName(name);
                 } catch (NameAlreadyBoundException e) {
                     Protocol.Error err = Protocol.Error.NameAlreadyInUse;
-                    ChannelIO.write(senderchannel, protocol.new ErrorMessage(err).toString());
+                    ChannelIO.write(clientChannel, protocol.new ErrorMessage(err).toString());
                 }
-            } else {
-                String username = User.get(client).getName();
+            }
+            // for any other message, do what is defined in the Protocol
+            else {
+                String username = u.getName();
+                if (username == null) {
+                    // user still in lobby, should only be able to login
+                    Protocol.Error err = Protocol.Error.CommandNotAllowed;
+                    ChannelIO.write(clientChannel, protocol.new ErrorMessage(err).toString());
+                }
                 cmd.action(username);
             }
         }
@@ -94,7 +109,8 @@ public class ChatServer implements IServer {
     private void processAccept() throws IOException {
         SocketChannel talkChannel = listener.accept();
         talkChannel.configureBlocking(false);
-        talkChannel.register(events, SelectionKey.OP_READ);
+        SelectionKey userkey = talkChannel.register(events, SelectionKey.OP_READ);
+        new User(userkey);
     }
 
     @Override
