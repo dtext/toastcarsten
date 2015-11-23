@@ -1,5 +1,6 @@
 package org.toastcarsten.server;
 
+import org.toastcarsten.errors.CommandNotFoundException;
 import org.toastcarsten.shared.Protocol;
 import org.toastcarsten.shared.IServer;
 
@@ -78,7 +79,7 @@ public class ChatServer implements IServer {
             // try to parse command, if invalid, send error
             try {
                 cmd = (Protocol.ClientCommand) protocol.parseClient(message);
-            } catch (ClassCastException e) {
+            } catch (CommandNotFoundException e) {
                 Protocol.Error err = Protocol.Error.CommandNotFound;
                 ChannelIO.write(clientChannel, protocol.new ErrorMessage(err).toString());
                 continue;

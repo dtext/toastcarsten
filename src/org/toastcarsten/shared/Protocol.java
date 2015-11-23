@@ -1,11 +1,13 @@
 package org.toastcarsten.shared;
 
+import org.toastcarsten.errors.CommandNotFoundException;
 import org.toastcarsten.server.User;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.StringJoiner;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Protocol {
 
@@ -54,6 +56,7 @@ public class Protocol {
 
     // --------------- Client Commands ---------------
     public class Login extends ClientCommand {
+
         public Login(String username) {
             cmd = "/login";
             args = username;
@@ -90,7 +93,10 @@ public class Protocol {
         @Override
         public void action(String user) {
             try {
-                server.send(user, new UserlistAnswer().toString());
+                Collection<String> names = new ArrayList<>();
+                for (User u : User.getUsers())
+                    names.add(u.getName());
+                server.send(user, new UserlistAnswer(names).toString());
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -184,7 +190,7 @@ public class Protocol {
 
         @Override
         public void action() {
-            // TODO: according to the protocol, this shouldn't be here. Look this up.
+            client.printHl("You have been inactive for 5 Minutes, you got disconnected.");
         }
     }
 
@@ -192,12 +198,10 @@ public class Protocol {
 
         private static final String sep = ", ";
 
-        public UserlistAnswer() {
+        public UserlistAnswer(Collection<String> users) {
             cmd = "/userlist";
             StringJoiner sj = new StringJoiner(sep);
-            for (User u : User.getUsers()) {
-                sj.add(u.getName());
-            }
+            users.forEach(sj::add);
             args = sj.toString();
         }
 
@@ -244,26 +248,93 @@ public class Protocol {
     }
 
     // --------------- Command Parsing ---------------
+    private final static Pattern
+            rLogin =             Pattern.compile("\\/login ([a-zA-Z0-9]+)"),
+            rLogout =            Pattern.compile("\\/logout (.+)"),
+            rUserlistRequest =   Pattern.compile("\\/userlist"),
+            rMessage =           Pattern.compile("[^\\/].+"),
+            rError =             Pattern.compile("\\/error (\\w+)"), //TODO define precisely?
+            rUserleft =          Pattern.compile("\\/userleft ([a-zA-Z0-9]+) (\\w+)"), //TODO define precisely?
+            rUserjoined =        Pattern.compile("\\/userjoined ([a-zA-Z0-9]+)"),
+            rUsertimeout =       Pattern.compile("\\/usertimeout ([a-zA-Z0-9]+)"),
+            rUserlistAnswer =    Pattern.compile("\\/userlist ((?:(?:[a-zA-Z0-9]+)(?:, )?)+)"),
+            rRedirectedMessage = Pattern.compile("([a-zA-Z0-9]+)\\: (.+)"),
+            rServerMessage =     Pattern.compile("\\/server (.+)"),
+            rWelcome =           Pattern.compile("\\/welcome ([a-zA-Z0-9]+)");
+
+    /**
+     * Get arguments of a command
+     * @param raw the raw command text
+     * @param regex the regex corresponding to that command type
+     * @param n the amount of arguments to return
+     * @return String array of arguments
+     */
+    private String[] getArgs(String raw, Pattern regex, int n) {
+        String[] result = new String[n];
+        Matcher m = regex.matcher(raw);
+        for (int i = 0; i < n; ++i) {
+            result[i] = m.group(i);
+        }
+        return result;
+    }
 
     /**
      * Parses a client command.
      * Should almost always be called by the server.
      * @param raw The raw command string
-     * @return the corresponding Command object
+     * @return the corresponding Command object, or null if the command was not found.
      */
-    public Command parseClient(String raw) {
-        //TODO parse client commands here
-        return new Welcome("tmp");
+    public Command parseClient(String raw) throws CommandNotFoundException {
+        if (rLogin.matcher(raw).matches()) {
+            return new Login(getArgs(raw, rLogin, 1)[0]);
+        }
+        else if (rLogout.matcher(raw).matches()) {
+            return new Logout();
+        }
+        else if (rUserlistRequest.matcher(raw).matches()) {
+            return new UserlistRequest();
+        }
+        else if (rMessage.matcher(raw).matches()) {
+            return new Message(raw);
+        }
+        throw new CommandNotFoundException("The given command could not be evaluated: " + raw);
     }
 
     /**
      * Parses a server command.
      * Should almost always be called by the client.
      * @param raw The raw command string
-     * @return the corresponding Command object
+     * @return the corresponding Command object, or null if the command was not found.
      */
-    public Command parseServer(String raw) {
-        //TODO parse server Commands here
-        return new Welcome("tmp");
+    public Command parseServer(String raw) throws CommandNotFoundException{
+        if (rError.matcher(raw).matches()) {
+            String err = getArgs(raw, rError, 1)[0];
+            return new ErrorMessage(Error.valueOf(err));
+        }
+        else if (rUserleft.matcher(raw).matches()) {
+            String[] args = getArgs(raw, rUserleft, 2);
+            return new UserLeft(args[0], Reason.valueOf(args[1]));
+        }
+        else if (rUserjoined.matcher(raw).matches()) {
+            return new UserJoined(getArgs(raw, rUserjoined, 1)[0]);
+        }
+        else if (rUsertimeout.matcher(raw).matches()) {
+            return new UserTimeout();
+        }
+        else if (rUserlistAnswer.matcher(raw).matches()) {
+            String users = getArgs(raw, rUserlistAnswer, 1)[0];
+            return new UserlistAnswer(Arrays.asList(users.split(", ")));
+        }
+        else if (rServerMessage.matcher(raw).matches()) {
+            return new ServerMessage(getArgs(raw, rServerMessage, 1)[0]);
+        }
+        else if (rWelcome.matcher(raw).matches()) {
+            return new Welcome(getArgs(raw, rServerMessage, 1)[0]);
+        }
+        else if (rRedirectedMessage.matcher(raw).matches()) {
+            String[] args = getArgs(raw, rRedirectedMessage, 2);
+            return new RedirectedMessage(args[1], args[2]);
+        }
+        throw new CommandNotFoundException("The given command could not be evaluated: " + raw);
     }
 }
