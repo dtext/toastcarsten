@@ -253,8 +253,8 @@ public class Protocol {
             rLogout =            Pattern.compile("\\/logout (.+)"),
             rUserlistRequest =   Pattern.compile("\\/userlist"),
             rMessage =           Pattern.compile("[^\\/].+"),
-            rError =             Pattern.compile("\\/error (\\w+)"), //TODO define precisely?
-            rUserleft =          Pattern.compile("\\/userleft ([a-zA-Z0-9]+) (\\w+)"), //TODO define precisely?
+            rError =             Pattern.compile("\\/error (NameAlreadyInUse|CommandNotAllowed|CommandNotFound)"),
+            rUserleft =          Pattern.compile("\\/userleft ([a-zA-Z0-9]+) (timeout|logout)"),
             rUserjoined =        Pattern.compile("\\/userjoined ([a-zA-Z0-9]+)"),
             rUsertimeout =       Pattern.compile("\\/usertimeout ([a-zA-Z0-9]+)"),
             rUserlistAnswer =    Pattern.compile("\\/userlist ((?:(?:[a-zA-Z0-9]+)(?:, )?)+)"),
