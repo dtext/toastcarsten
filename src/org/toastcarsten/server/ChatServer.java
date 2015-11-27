@@ -1,6 +1,7 @@
 package org.toastcarsten.server;
 
 import org.toastcarsten.errors.CommandNotFoundException;
+import org.toastcarsten.errors.ConnectionClosedException;
 import org.toastcarsten.shared.Protocol;
 import org.toastcarsten.shared.IServer;
 
@@ -51,11 +52,12 @@ public class ChatServer implements IServer {
                 if (event.isReadable()) {
                     //someone sent a message
                     try {
-                        //event.attachment()
                         this.processRead(event);
                     } catch (IOException e) {
                         e.printStackTrace();
                         System.err.println("Error receiving a message.");
+                    } catch (ConnectionClosedException e) {
+                        User.remove(User.get(event));
                     }
                 } else if (event.isAcceptable()) {
                     //someone tries to connect
@@ -70,7 +72,7 @@ public class ChatServer implements IServer {
         }
     }
 
-    private void processRead(SelectionKey client) throws IOException {
+    private void processRead(SelectionKey client) throws IOException, ConnectionClosedException {
         User u = User.get(client);
         SocketChannel clientChannel = u.getChannel();
         String[] messages = ChannelIO.read((SocketChannel)client.channel()).split("\n");
@@ -101,6 +103,7 @@ public class ChatServer implements IServer {
                     // user still in lobby, should only be able to login
                     Protocol.Error err = Protocol.Error.CommandNotAllowed;
                     ChannelIO.write(clientChannel, protocol.new ErrorMessage(err).toString());
+                    return;
                 }
                 cmd.action(username);
             }

@@ -1,17 +1,19 @@
 package org.toastcarsten.server;
 
+import org.toastcarsten.errors.ConnectionClosedException;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 public class ChannelIO {
 
-    public static String read(SocketChannel client) throws IOException {
+    public static String read(SocketChannel client) throws IOException, ConnectionClosedException {
         ByteBuffer buf = ByteBuffer.allocate(1024);
         int numbytes = client.read(buf);
         switch (numbytes) {
             case (-1) :
-                throw new IOException("Connection closed unexpectedly");
+                throw new ConnectionClosedException("Connection closed unexpectedly");
             case 0 :
                 return"";
             default :
