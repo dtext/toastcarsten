@@ -1,5 +1,6 @@
 package org.toastcarsten.shared;
 
+import org.toastcarsten.errors.CommandArgumentParsingException;
 import org.toastcarsten.errors.CommandNotFoundException;
 import org.toastcarsten.server.User;
 
@@ -7,7 +8,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Protocol {
 
@@ -31,7 +31,7 @@ public class Protocol {
             if (cmd.equals(""))
                 return args;
             else
-                return "/" + cmd + " " + args;
+                return cmd + " " + args;
         }
     }
 
@@ -250,7 +250,7 @@ public class Protocol {
     // --------------- Command Parsing ---------------
     private final static Pattern
             rLogin =             Pattern.compile("\\/login ([a-zA-Z0-9]+)"),
-            rLogout =            Pattern.compile("\\/logout (.+)"),
+            rLogout =            Pattern.compile("\\/logout(?: (.+))?"),
             rUserlistRequest =   Pattern.compile("\\/userlist"),
             rMessage =           Pattern.compile("[^\\/].+"),
             rError =             Pattern.compile("\\/error (NameAlreadyInUse|CommandNotAllowed|CommandNotFound)"),
@@ -264,18 +264,22 @@ public class Protocol {
 
     /**
      * Get arguments of a command
-     * @param raw the raw command text
-     * @param regex the regex corresponding to that command type
+     * @param m A matcher object created from the regex and the matching string.
      * @param n the amount of arguments to return
      * @return String array of arguments
+     * @throws CommandArgumentParsingException
      */
-    private String[] getArgs(String raw, Pattern regex, int n) {
+    private String[] getArgs(Matcher m, int n) throws CommandArgumentParsingException{
         String[] result = new String[n];
-        Matcher m = regex.matcher(raw);
-        for (int i = 0; i < n; ++i) {
-            result[i] = m.group(i);
+        try {
+            for (int i = 0; i < n; ++i) {
+                // exclude "0th" capturing group, that would be the whole match
+                result[i] = m.group(i + 1);
+            }
+            return result;
+        } catch (Exception e) {
+            throw new CommandArgumentParsingException("An error occured while extracting command arguments from command");
         }
-        return result;
     }
 
     /**
@@ -285,18 +289,24 @@ public class Protocol {
      * @return the corresponding Command object, or null if the command was not found.
      */
     public Command parseClient(String raw) throws CommandNotFoundException {
-        if (rLogin.matcher(raw).matches()) {
-            return new Login(getArgs(raw, rLogin, 1)[0]);
+        Matcher m;
+        try {
+            if ( (m = rLogin.matcher(raw)).matches()) {
+                return new Login(getArgs(m, 1)[0]);
+            }
+            else if ((m = rLogout.matcher(raw)).matches()) {
+                return new Logout();
+            }
+            else if ((m = rUserlistRequest.matcher(raw)).matches()) {
+                return new UserlistRequest();
+            }
+            else if ((m = rMessage.matcher(raw)).matches()){
+                return new Message(raw);
+            }
+        } catch (CommandArgumentParsingException e) {
+            throw new CommandNotFoundException("The given command could not be evaluated: " + raw);
         }
-        else if (rLogout.matcher(raw).matches()) {
-            return new Logout();
-        }
-        else if (rUserlistRequest.matcher(raw).matches()) {
-            return new UserlistRequest();
-        }
-        else if (rMessage.matcher(raw).matches()) {
-            return new Message(raw);
-        }
+        // the given text does not match any of the patterns
         throw new CommandNotFoundException("The given command could not be evaluated: " + raw);
     }
 
@@ -307,34 +317,40 @@ public class Protocol {
      * @return the corresponding Command object, or null if the command was not found.
      */
     public Command parseServer(String raw) throws CommandNotFoundException{
-        if (rError.matcher(raw).matches()) {
-            String err = getArgs(raw, rError, 1)[0];
-            return new ErrorMessage(Error.valueOf(err));
+        try {
+            Matcher m;
+            if ((m = rError.matcher(raw)).matches()) {
+                String err = getArgs(m, 1)[0];
+                return new ErrorMessage(Error.valueOf(err));
+            }
+            else if ((m = rUserleft.matcher(raw)).matches()) {
+                String[] args = getArgs(m, 2);
+                return new UserLeft(args[0], Reason.valueOf(args[1]));
+            }
+            else if ((m = rUserjoined.matcher(raw)).matches()) {
+                return new UserJoined(getArgs(m, 1)[0]);
+            }
+            else if ((m = rUsertimeout.matcher(raw)).matches()) {
+                return new UserTimeout();
+            }
+            else if ((m = rUserlistAnswer.matcher(raw)).matches()) {
+                String users = getArgs(m, 1)[0];
+                return new UserlistAnswer(Arrays.asList(users.split(", ")));
+            }
+            else if ((m = rServerMessage.matcher(raw)).matches()) {
+                return new ServerMessage(getArgs(m, 1)[0]);
+            }
+            else if ((m = rWelcome.matcher(raw)).matches()) {
+                return new Welcome(getArgs(m, 1)[0]);
+            }
+            else if ((m = rRedirectedMessage.matcher(raw)).matches()) {
+                String[] args = getArgs(m, 2);
+                return new RedirectedMessage(args[1], args[2]);
+            }
+        } catch (CommandArgumentParsingException e) {
+            throw new CommandNotFoundException("Error parsing arguments for the given command: " + raw);
         }
-        else if (rUserleft.matcher(raw).matches()) {
-            String[] args = getArgs(raw, rUserleft, 2);
-            return new UserLeft(args[0], Reason.valueOf(args[1]));
-        }
-        else if (rUserjoined.matcher(raw).matches()) {
-            return new UserJoined(getArgs(raw, rUserjoined, 1)[0]);
-        }
-        else if (rUsertimeout.matcher(raw).matches()) {
-            return new UserTimeout();
-        }
-        else if (rUserlistAnswer.matcher(raw).matches()) {
-            String users = getArgs(raw, rUserlistAnswer, 1)[0];
-            return new UserlistAnswer(Arrays.asList(users.split(", ")));
-        }
-        else if (rServerMessage.matcher(raw).matches()) {
-            return new ServerMessage(getArgs(raw, rServerMessage, 1)[0]);
-        }
-        else if (rWelcome.matcher(raw).matches()) {
-            return new Welcome(getArgs(raw, rServerMessage, 1)[0]);
-        }
-        else if (rRedirectedMessage.matcher(raw).matches()) {
-            String[] args = getArgs(raw, rRedirectedMessage, 2);
-            return new RedirectedMessage(args[1], args[2]);
-        }
+        // the given text does not match any of the patterns
         throw new CommandNotFoundException("The given command could not be evaluated: " + raw);
     }
 }
