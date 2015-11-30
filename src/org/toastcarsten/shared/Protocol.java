@@ -112,7 +112,7 @@ public class Protocol {
         @Override
         public void action(String user) {
             try {
-                server.multicast(user, args);
+                server.multicast(user, user + ": " + args);
             } catch (IOException e) {
                 e.printStackTrace();
             }
