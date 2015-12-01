@@ -74,6 +74,7 @@ public class ChatServer implements IServer {
 
     private void processRead(SelectionKey client) throws IOException, ConnectionClosedException {
         User u = User.get(client);
+        u.resetTimeout();
         SocketChannel clientChannel = u.getChannel();
         String[] messages = ChannelIO.read((SocketChannel)client.channel()).split("\n");
         for (String message : messages) {

@@ -30,13 +30,23 @@ public class User {
         return selkeyMap.values();
     }
 
-    public static void remove(User u) {
+    /**
+     * Close the connection to this user and remove him from the user list.
+     * @param u the user to remove
+     * @return true if a user has been found and removed, false otherwise.
+     */
+    public static boolean remove(User u) {
+        if (System.currentTimeMillis() < u.getTimeout()) {
+            // user is not removed because of timeout, cancel the service as well
+            u.stopTimeout();
+        }
         try {
-            nameMap.remove(u.getName());
-            selkeyMap.remove(u.getSelectionKey());
             u.getSelectionKey().cancel();
             u.getChannel().close();
+            nameMap.remove(u.getName());
+            return (selkeyMap.remove(u.getSelectionKey()) != null);
         } catch (IOException e) {}
+        return false;
     }
 
     // --------------- non-static ---------------
@@ -44,10 +54,14 @@ public class User {
     private String name = null;
     private SelectionKey key;
     private long timeout;
+    private Thread timeoutservice;
 
     public User(SelectionKey key) {
         this.key = key;
         User.selkeyMap.put(key, this);
+        // start timeout service
+        this.resetTimeout();
+        this.timeoutservice = TimeoutService.start(this);
     }
 
     public void setName(String name) throws NameAlreadyBoundException {
@@ -58,8 +72,6 @@ public class User {
         if (nameMap.putIfAbsent(name, this) != null)
             throw new NameAlreadyBoundException("The given username is taken!");
         this.name = name;
-        //user logged in, initialize timeout
-
     }
 
     public String getName() {
@@ -78,10 +90,17 @@ public class User {
      * Resets the "inactive-timer" on this user to 5 Minutes from now
      */
     public void resetTimeout() {
-        timeout = System.currentTimeMillis() + 30000;
+        timeout = System.currentTimeMillis() + 300000;
     }
 
     public long getTimeout() {
         return timeout;
+    }
+
+    /**
+     * Stops the timeout service for this user.
+     */
+    public void stopTimeout() {
+        this.timeoutservice.interrupt();
     }
 }
