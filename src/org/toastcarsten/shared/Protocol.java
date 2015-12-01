@@ -94,7 +94,7 @@ public class Protocol {
         public void action(String user) {
             try {
                 Collection<String> names = new ArrayList<>();
-                for (User u : User.getUsers())
+                for (User u : User.getParticipants())
                     names.add(u.getName());
                 server.send(user, new UserlistAnswer(names).toString());
             } catch (IOException e) {

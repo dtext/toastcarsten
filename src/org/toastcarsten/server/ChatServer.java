@@ -125,7 +125,7 @@ public class ChatServer implements IServer {
 
     @Override
     public void multicast(String sender, String text) throws IOException {
-        for (User user : User.getUsers()) {
+        for (User user : User.getParticipants()) {
             if (!user.getName().equals(sender))
                 ChannelIO.write(user.getChannel(), text);
         }

@@ -22,8 +22,12 @@ public class User {
         return selkeyMap.get(k);
     }
 
-    public static Collection<User> getUsers() {
+    public static Collection<User> getParticipants() {
         return nameMap.values();
+    }
+
+    public static Collection<User> getUsers() {
+        return selkeyMap.values();
     }
 
     public static void remove(User u) {
